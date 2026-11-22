@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control de Gastos</title>
+  <style>
+    :root {
+      --bg: #131314;
+      --surface: #1e1f20;
+      --surface-hover: #282a2c;
+      --border: #333537;
+      --text: #e3e3e3;
+      --text-muted: #9aa0a6;
+      --accent: #a8c7fa;
+      --accent-bg: rgba(168, 199, 250, 0.12);
+      --warning: #fdd663;
+      --danger: #f28b82;
+      --success: #81c995;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; max-width: 720px; margin: 0 auto; line-height: 1.5; }
+
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    h1 { font-size: 1.4rem; font-weight: 600; background: linear-gradient(90deg, #a8c7fa, #d7aefb); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    select, button { background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 8px 14px; border-radius: 12px; font-size: 0.9rem; cursor: pointer; }
+    select:focus, button:hover { background: var(--surface-hover); }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 18px; }
+    .card-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 12px; font-weight: 600; }
+
+    /* Alerta pendientes >= $100 */
+    .pending-card { border-color: rgba(253, 214, 99, 0.4); background: linear-gradient(180deg, rgba(253, 214, 99, 0.07) 0%, var(--surface) 100%); }
+    .pending-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); gap: 10px; flex-wrap: wrap; }
+    .pending-item:last-child { border-bottom: none; }
+    .btn-group { display: flex; gap: 8px; }
+    .btn-mio { background: var(--accent-bg); color: var(--accent); border-color: rgba(168, 199, 250, 0.3); font-weight: 600; }
+    .btn-negocio { background: transparent; color: var(--text-muted); }
+
+    /* KPI Total */
+    .total-box { display: flex; justify-content: space-between; align-items: baseline; }
+    .total-amount { font-size: 2.2rem; font-weight: 700; color: #fff; }
+    .toggle-negocio { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-muted); cursor: pointer; user-select: none; }
+    .toggle-negocio input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+    /* Tabla Top Gastos */
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 0.92rem; }
+    th { color: var(--text-muted); font-weight: 500; font-size: 0.8rem; }
+    td.amount { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+    tr:last-child td { border-bottom: none; }
+
+    .badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 8px; background: var(--accent-bg); color: var(--accent); }
+    .badge.negocio { background: rgba(154, 160, 166, 0.15); color: var(--text-muted); }
+
+    /* Lista movimientos */
+    .tx-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .tx-row:last-child { border-bottom: none; }
+    .tx-info { display: flex; flex-direction: column; gap: 2px; }
+    .tx-comercio { font-weight: 500; }
+    .tx-meta { font-size: 0.8rem; color: var(--text-muted); }
+
+    /* Cuadro de recomendación */
+    .reco-card { border-color: rgba(168, 199, 250, 0.35); background: linear-gradient(135deg, rgba(168, 199, 250, 0.08), rgba(215, 174, 251, 0.06)); }
+    .reco-card p { font-size: 0.95rem; color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Resumen de Gastos</h1>
+    <select id="mesSelector"></select>
+  </header>
+
+  <div id="pendientesContainer" class="card pending-card" style="display:none;">
+    <div class="card-title" style="color: var(--warning);">Confirmar gastos mayores a $100</div>
+    <div id="pendientesLista"></div>
+  </div>
+
+  <div class="card">
+    <div class="total-box">
+      <div>
+        <div class="card-title" style="margin-bottom:4px;">Total Personal del Mes</div>
+        <div class="total-amount" id="totalMes">$0.00</div>
+      </div>
+      <label class="toggle-negocio">
+        <input type="checkbox" id="verNegocioCheck" />
+        Mostrar negocio
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Top Gastos por Categoría</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Categoría</th>
+          <th>Movimientos</th>
+          <th style="text-align:right;">Total</th>
+        </tr>
+      </thead>
+      <tbody id="topGastosBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Movimientos del Mes</div>
+    <div id="movimientosLista"></div>
+  </div>
+
+  <div class="card reco-card">
+    <div class="card-title" style="color: var(--accent);">Análisis y Recomendación</div>
+    <p id="recomendacionTexto">Cargando análisis del mes...</p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCjMk9sxtGkUEekfp2HyruJ_bGU7E9M7mU",
+      authDomain: "gastos-hermano-3c1d6.firebaseapp.com",
+      projectId: "gastos-hermano-3c1d6",
+      storageBucket: "gastos-hermano-3c1d6.firebasestorage.app",
+      messagingSenderId: "375155242180",
+      appId: "1:375155242180:web:b9e6511e7e41f7955c4591"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let todosLosGastos = [];
+    let mesSeleccionado = "";
+
+    const mesSelector = document.getElementById("mesSelector");
+    const verNegocioCheck = document.getElementById("verNegocioCheck");
+
+    verNegocioCheck.addEventListener("change", render);
+    mesSelector.addEventListener("change", (e) => {
+      mesSeleccionado = e.target.value;
+      render();
+    });
+
+    const q = query(collection(db, "gastos"), orderBy("fecha", "desc"));
+    onSnapshot(q, (snapshot) => {
+      todosLosGastos = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      actualizarSelectorMeses();
+      render();
+    });
+
+    function actualizarSelectorMeses() {
+      const mesesUnicos = [...new Set(todosLosGastos.map(g => g.mesAnio))].sort().reverse();
+      if (mesesUnicos.length === 0) {
+        document.getElementById("movimientosLista").innerHTML = `<div style="color:var(--text-muted); font-size:0.9rem;">Esperando el primer SMS de consumo...</div>`;
+        document.getElementById("recomendacionTexto").textContent = "Aún no hay datos registrados.";
+        return;
+      }
+
+      if (!mesSeleccionado || !mesesUnicos.includes(mesSeleccionado)) {
+        mesSeleccionado = mesesUnicos[0];
+      }
+
+      mesSelector.innerHTML = mesesUnicos.map(m => {
+        const [anio, mes] = m.split("-");
+        const nombreMes = new Date(anio, parseInt(mes) - 1).toLocaleString("es-EC", { month: "long", year: "numeric" });
+        return `<option value="${m}" ${m === mesSeleccionado ? "selected" : ""}>${nombreMes.toUpperCase()}</option>`;
+      }).join("");
+    }
+
+    window.clasificarPendiente = async (id, nuevoTipo) => {
+      await updateDoc(doc(db, "gastos", id), { tipo: nuevoTipo });
+    };
+
+    function render() {
+      const mostrarNegocio = verNegocioCheck.checked;
+      const gastosDelMes = todosLosGastos.filter(g => g.mesAnio === mesSeleccionado);
+
+      const pendientes = gastosDelMes.filter(g => g.tipo === "pendiente");
+      const pendContainer = document.getElementById("pendientesContainer");
+      const pendLista = document.getElementById("pendientesLista");
+
+      if (pendientes.length > 0) {
+        pendContainer.style.display = "block";
+        pendLista.innerHTML = pendientes.map(p => `
+          <div class="pending-item">
+            <div>
+              <strong>$${p.monto.toFixed(2)}</strong> en <span>${p.comercio}</span>
+              <div class="tx-meta">¿Este gasto fue tuyo o del negocio?</div>
+            </div>
+            <div class="btn-group">
+              <button class="btn-mio" onclick="clasificarPendiente('${p.id}', 'personal')">Mío</button>
+              <button class="btn-negocio" onclick="clasificarPendiente('${p.id}', 'negocio')">Negocio</button>
+            </div>
+          </div>
+        `).join("");
+      } else {
+        pendContainer.style.display = "none";
+      }
+
+      const gastosPersonales = gastosDelMes.filter(g => g.tipo === "personal");
+      const totalPersonal = gastosPersonales.reduce((acc, g) => acc + g.monto, 0);
+      document.getElementById("totalMes").textContent = `$${totalPersonal.toFixed(2)}`;
+
+      const porCategoria = {};
+      gastosPersonales.forEach(g => {
+        if (!porCategoria[g.categoria]) porCategoria[g.categoria] = { total: 0, count: 0 };
+        porCategoria[g.categoria].total += g.monto;
+        porCategoria[g.categoria].count += 1;
+      });
+
+      const ranking = Object.entries(porCategoria).sort((a, b) => b[1].total - a[1].total);
+      document.getElementById("topGastosBody").innerHTML = ranking.length
+        ? ranking.map(([cat, info]) => `
+            <tr>
+              <td><span class="badge">${cat}</span></td>
+              <td>${info.count}</td>
+              <td class="amount">$${info.total.toFixed(2)}</td>
+            </tr>
+          `).join("")
+        : `<tr><td colspan="3" style="color:var(--text-muted);">Sin gastos personales registrados este mes.</td></tr>`;
+
+      const listaVisible = gastosDelMes.filter(g => {
+        if (g.tipo === "personal") return true;
+        if (g.tipo === "negocio" && mostrarNegocio) return true;
+        return false;
+      });
+
+      document.getElementById("movimientosLista").innerHTML = listaVisible.length
+        ? listaVisible.map(g => {
+            const fechaStr = g.fecha?.toDate ? g.fecha.toDate().toLocaleDateString("es-EC", { day: "2-digit", month: "short" }) : "";
+            return `
+              <div class="tx-row">
+                <div class="tx-info">
+                  <span class="tx-comercio">${g.comercio} ${g.tipo === "negocio" ? '<span class="badge negocio">Negocio</span>' : ''}</span>
+                  <span class="tx-meta">${fechaStr} · ${g.categoria}</span>
+                </div>
+                <div class="amount">$${g.monto.toFixed(2)}</div>
+              </div>
+            `;
+          }).join("")
+        : `<div style="color:var(--text-muted); font-size:0.9rem;">No hay movimientos para mostrar.</div>`;
+
+      generarRecomendacion(gastosPersonales, ranking, totalPersonal);
+    }
+
+    function generarRecomendacion(gastosPersonales, ranking, total) {
+      const el = document.getElementById("recomendacionTexto");
+      if (gastosPersonales.length === 0) {
+        el.textContent = "Aún no hay suficientes gastos personales este mes para darte una recomendación.";
+        return;
+      }
+
+      const suscripciones = gastosPersonales.filter(g => g.categoria === "Suscripciones" || g.categoria === "Compras en línea");
+      const totalServicios = suscripciones.reduce((s, g) => s + g.monto, 0);
+      const comerciosUnicos = [...new Set(suscripciones.map(g => g.comercio))].join(", ");
+
+      if (totalServicios > 0 && (totalServicios / total) >= 0.25) {
+        el.innerHTML = `Este último mes gastaste <strong>$${totalServicios.toFixed(2)}</strong> en servicios y compras en línea (<strong>${comerciosUnicos}</strong>). Quizás te convenga pausar o dejar de tener alguno por un tiempo para reducir tus gastos fijos.`;
+      } else {
+        const [topCat, topData] = ranking[0];
+        el.innerHTML = `Tu mayor fuga de dinero este mes fue en <strong>${topCat}</strong> con <strong>$${topData.total.toFixed(2)}</strong> (${((topData.total / total) * 100).toFixed(0)}% de tus gastos personales). Revisa si puedes recortar los consumos pequeños en esa categoría.`;
+      }
+    }
+  </script>
+</body>
+</html>
